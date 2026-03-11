@@ -15,7 +15,9 @@ describe("api_key_manager", () => {
   let keyAccountPda: anchor.web3.PublicKey;
 
   before(async () => {
-    await provider.connection.requestAirdrop(holder.publicKey, 1e9);
+    // Fund holder and confirm before proceeding — prevents flaky tests
+    const sig = await provider.connection.requestAirdrop(holder.publicKey, 1e9);
+    await provider.connection.confirmTransaction(sig, "confirmed");
 
     [keyAccountPda] = anchor.web3.PublicKey.findProgramAddressSync(
       [

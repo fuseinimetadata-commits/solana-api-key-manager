@@ -36,6 +36,7 @@ pub mod api_key_manager {
         key_account.service_name = service_name;
         key_account.permissions = permissions;
         key_account.issued_at = clock.slot;
+        key_account.issued_epoch = clock.epoch;
         key_account.expires_at = expires_in_slots.map(|s| clock.slot + s);
         key_account.is_revoked = false;
         key_account.call_count = 0;
@@ -70,11 +71,12 @@ pub mod api_key_manager {
             require!(clock.slot <= exp, ApiKeyError::KeyExpired);
         }
 
-        // Rate-limit: reset counter each epoch (432,000 slots ~= 2 days)
-        let epoch_slot = clock.slot / 432_000;
-        let key_epoch = key_account.issued_at / 432_000;
-        if epoch_slot > key_epoch {
+        // Rate-limit: reset counter at each new Solana epoch boundary.
+        // Uses clock.epoch (true epoch counter) rather than slot arithmetic
+        // so that resets align precisely with actual epoch transitions.
+        if clock.epoch > key_account.issued_epoch {
             key_account.call_count = 0;
+            key_account.issued_epoch = clock.epoch;
         }
         require!(
             key_account.call_count < key_account.rate_limit,
@@ -139,6 +141,9 @@ pub struct ApiKeyAccount {
     pub service_name: String,
     pub permissions: Vec<String>,
     pub issued_at: u64,
+    /// The Solana epoch when this key was last reset.
+    /// Used for accurate epoch-boundary rate limit resets.
+    pub issued_epoch: u64,
     pub expires_at: Option<u64>,
     pub is_revoked: bool,
     pub call_count: u64,
@@ -147,7 +152,7 @@ pub struct ApiKeyAccount {
 }
 
 impl ApiKeyAccount {
-    pub const MAX_SIZE: usize = 32 + 32 + (4 + 32) + (4 + 8 * (4 + 16)) + 8 + 9 + 1 + 8 + 8 + 1 + 8;
+    pub const MAX_SIZE: usize = 32 + 32 + (4 + 32) + (4 + 8 * (4 + 16)) + 8 + 8 + 9 + 1 + 8 + 8 + 1 + 8;
 }
 
 // === Contexts ===
